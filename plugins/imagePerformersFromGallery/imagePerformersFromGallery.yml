@@ -2,22 +2,32 @@
 # to be the same as their parent gallery/galleries if the galleries have any performers.
 #
 # Any images that already have 1 or more performers will be ignored, even if their gallery
-# has more performers, since these are assumed to be already organized.
+# has more performers, since these are assumed to be already organized. This can be
+# overridden by creating a tag called "Update Performers" and applying it to images that
+# you want to force an update on.
+#
+# Changes can be limited to specific galleries by applying the same "Update Performers"
+# tag to them and running the "Tagged Galleries" task. Images not in these galleries
+# will be ignored (even if they also have the "Update Performers" tag)
 
-name: "Image Performers From Gallery"
-description: Will set image performers based on gallery metadata for images with no performers.
-version: 0.1.0
+name: "Set Image Performers From Gallery"
+description: Sets image performers based on gallery metadata
+version: 0.2.0
 url: https://github.com/bdbenim/CommunityScripts
 exec:
   - python
   - "{pluginDir}/imagePerformersFromGallery.py"
 interface: raw
 tasks:
-  - name: 'Set Performers'
-    description: 'Add performers to all images with no performers based on their gallery. '
+  - name: 'All Galleries'
+    description: 'Update all images with 0 performers to match their gallery performers.'
     defaultArgs:
       mode: update
+  - name: 'Tagged Galleries'
+    description: 'Add performers to all images with no performers based on their gallery, but only if the gallery has the "Update Performers" tag.'
+    defaultArgs:
+      mode: tagged
   - name: 'Dry Run'
-    description: 'Only checks for eligible images, but does not make any changes. '
+    description: 'Only checks for eligible images, but does not make any changes. Check the logs to see how many images are found.'
     defaultArgs:
       mode: dryrun
