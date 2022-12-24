@@ -1,0 +1,23 @@
+# This plugin searches for all images with a performer count of 0 and sets their performers
+# to be the same as their parent gallery/galleries if the galleries have any performers.
+#
+# Any images that already have 1 or more performers will be ignored, even if their gallery
+# has more performers, since these are assumed to be already organized.
+
+name: "Image Performers From Gallery"
+description: Will set image performers based on gallery metadata for images with no performers.
+version: 0.1.0
+url: https://github.com/bdbenim/CommunityScripts
+exec:
+  - python
+  - "{pluginDir}/imagePerformersFromGallery.py"
+interface: raw
+tasks:
+  - name: 'Set Performers'
+    description: 'Add performers to all images with no performers based on their gallery. '
+    defaultArgs:
+      mode: update
+  - name: 'Dry Run'
+    description: 'Only checks for eligible images, but does not make any changes. '
+    defaultArgs:
+      mode: dryrun
