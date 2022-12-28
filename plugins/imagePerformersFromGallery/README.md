@@ -1,6 +1,6 @@
 # Image Performers From Gallery
 
-This plugin sets image performers to match their gallery metadata without modifying already organized images.
+This plugin sets image performers and studio to match their gallery metadata without modifying already organized images.
 
 # Requirements
 
@@ -29,3 +29,13 @@ Running this task performs only the searching for galleries and images without m
 any changes. The number of images matching the criteria can be found in the stash logs.
 Currently this only corresponds to the 'All Galleries' task, so does not reflect what will
 happen when running the 'Tagged Galleries' task.
+
+# Note
+
+Currently the plugin only checks for images based on their number of performers. This means
+that images with performers but no studio set will not have their studio added unless the
+"Update Performers" tag is applied. It also means that images with 0 performers will have
+their studio set to match their gallery, even if this is not desired. For images belonging
+to more than one gallery, the gallery used to determine the image studio will depend on which
+was returned first by the GraphQL API and is therefore undefined. Better logic to control this
+will come in a future update, as well as more control over what gets set by the plugin.

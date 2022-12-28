@@ -16,6 +16,9 @@ id
 tags {
     id
 }
+studio {
+    id
+}
 """
 IMAGE_FRAGMENT = """
 id
@@ -61,6 +64,10 @@ def main():
     log.info("Searching for galleries...")
     gallery_list = stash.find_galleries(
         GALLERY_FILTER, fragment=GALLERY_FRAGMENT)
+    #DEBUG:
+    # log.error("First Gallery:")
+    # log.error(gallery_list[0])
+    # log.exit("Debugging exit")
     total = len(gallery_list)
     log.info(f"Found {total} galleries")
     # Step 2, find images in those galleries with no performers:
@@ -69,6 +76,10 @@ def main():
     for i, gallery in enumerate(gallery_list):
         log.progress(i/total)
         galleryID = gallery["id"]
+        setStudio = False
+        if gallery["studio"] != None:
+            setStudio = True
+            studioID = gallery["studio"]["id"]
         # Include current gallery in the image filter
         IMAGE_FILTER["galleries"]["value"] = [galleryID]
         image_list = stash.find_images(IMAGE_FILTER, fragment=IMAGE_FRAGMENT)
@@ -99,6 +110,8 @@ def main():
                 update_input = {"id": image["id"],
                                 "performer_ids": performer_ids,
                                 "tag_ids": tagids}
+                if setStudio:
+                    update_input["studio_id"] = studioID
                 stash.update_image(update_input) # Save performers and tags
             log.info(
                 f"Updated {len(image_list)} images from gallery {galleryID}.")
