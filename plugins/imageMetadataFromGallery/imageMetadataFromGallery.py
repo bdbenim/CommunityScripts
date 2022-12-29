@@ -33,6 +33,10 @@ performers {
 IMAGE_FRAGMENT = """
 id
 galleries {
+    id
+    tags {
+        id
+    }
     performers {
         id
     }
@@ -64,10 +68,11 @@ IMAGE_FILTER = {"galleries": {"value": [], "modifier": "INCLUDES"},
 
 
 def main():
-    MODE = FRAGMENT['args']['mode']
-    log.info(f"Running in {MODE} mode")
+    dryrun = FRAGMENT['args']['mode'] == 'dryrun'
+    tagged = FRAGMENT['args']['tagged'].lower() == 'true'
+    log.info(f"Running in {'tagged' if tagged else 'untagged'} {'dry run' if dryrun else 'update'} mode")
 
-    performerTagID, studioTagID = setTagFilters(MODE)
+    performerTagID, studioTagID = setTagFilters(tagged)
 
     # Step 1, find galleries with performers:
     log.info("Searching for galleries...")
@@ -91,72 +96,88 @@ def main():
 
         # Determine whether or not to set performers and/or studio from this gallery:
         galSetStudio = setGalleryMetadataFlags(
-            gallery=gallery, mode=MODE, performerTagID=performerTagID, studioTagID=studioTagID)[1]
+            gallery, tagged, performerTagID, studioTagID, dryrun=True)[1]
 
         # Include current gallery in the image filter
         galleryID = gallery["id"]
         IMAGE_FILTER["galleries"]["value"] = [galleryID]
         image_list = stash.find_images(IMAGE_FILTER, fragment=IMAGE_FRAGMENT)
-        images = len(image_list)
-        imagetotal += images
+        #images = len(image_list)
+        #imagetotal += images
 
         # Step 3, set image performers:
-        if MODE != "dryrun":
-            for image in image_list:
-                # Each image falls into multiple cases requiring different actions:
-                # - 0 performers -> set performers based on galleries
-                # - no studio -> set studio based on gallery if present
-                # - tagged "Update Performers" -> set performers based on galleries
+        for image in image_list:
+            # Each image falls into multiple cases requiring different actions:
+            # - 0 performers -> set performers based on galleries
+            # - no studio -> set studio based on gallery if present
+            # - tagged "Update Performers" -> set performers based on galleries
 
-                # Don't reprocess images. May save time if many images appear in multiple
-                # galleries, but has no effect on result.
-                imageId = image["id"]
-                if imageId in completedImgs:
-                    continue
-                completedImgs.add(imageId)
+            # Don't reprocess images. May save time if many images appear in multiple
+            # galleries, but has no effect on result.
+            imageId = image["id"]
+            if imageId in completedImgs:
+                continue
+            completedImgs.add(imageId)
 
-                setPerformers, imgSetStudio = setImageMetadataFlags(
-                    image, performerTagID, studioTagID)
-                setStudio = galSetStudio and imgSetStudio
+            setPerformers, imgSetStudio = setImageMetadataFlags(
+                image, performerTagID, studioTagID, dryrun)
+            setStudio = galSetStudio and imgSetStudio
 
-                if setPerformers:
-                    # Images may belong to multiple galleries, which may or may not have
-                    # the same performers. All performers from all galleries will
-                    # be added to the image, not just the gallery from the filter.
-                    performer_ids = []
-                    for imgGallery in image["galleries"]:
-                        # Only include this gallery if it also meets criteria
-                        if setGalleryMetadataFlags(imgGallery, MODE, performerTagID, studioTagID)[0]:
-                            for performer in imgGallery["performers"]:
-                                id = performer["id"]
-                                if id not in performer_ids:
-                                    performer_ids.append(id)
+            if setPerformers:
+                # Images may belong to multiple galleries, which may or may not have
+                # the same performers. All performers from all galleries will
+                # be added to the image, not just the gallery from the filter.
+                performer_ids = []
+                for imgGallery in image["galleries"]:
+                    # Only include this gallery if it also meets criteria
+                    if setGalleryMetadataFlags(imgGallery, tagged, performerTagID, studioTagID, dryrun=True)[0]:
+                        for performer in imgGallery["performers"]:
+                            id = performer["id"]
+                            if id not in performer_ids:
+                                performer_ids.append(id)
 
-                # Build image update and increment counters:
-                update_input = {"id": image["id"]}
-                if setPerformers and len(performer_ids) > 0:
-                    imgPerformerTotal += 1
-                    update_input["performer_ids"] = performer_ids
-                if setStudio:
-                    imgStudioTotal += 1
-                    update_input["studio_id"] = gallery["studio"]["id"]
+            # Build image update and increment counters:
+            updated = False
+            update_input = {"id": image["id"]}
+            if setPerformers and len(performer_ids) > 0:
+                imgPerformerTotal += 1
+                updated = True
+                update_input["performer_ids"] = performer_ids
+            if setStudio:
+                imgStudioTotal += 1
+                updated = True
+                update_input["studio_id"] = gallery["studio"]["id"]
+            if not dryrun:
                 stash.update_image(update_input)  # Submit update
+            if updated:
+                imagetotal += 1
 
-            log.info(
-                f"Updated {len(image_list)} images from gallery {galleryID}.")
-
-    if MODE == "dryrun":
-        # TODO improve dry run functionality, including checking both tagged and normal modes
         log.info(
-            f"Found {imagetotal} eligible image(s). No changes were made.")
+            f"Processed {len(image_list)} image(s) from gallery {galleryID}.")
+
+    for gallery in gallery_list:
+        # Clear update tags now that all images have been processed
+        processTags(gallery, performerTagID,studioTagID,dryrun,True)
+
+    if dryrun:
+        logText = f"""Found {imagetotal} eligible image(s):
+            {imgPerformerTotal} image(s) have performer updates available
+            {imgStudioTotal} image(s) have studio updates available
+            No changes were made
+        """
+        log.info(logText)
     else:
-        log.info(f"Finished updating {imagetotal} images. Updated performers on {imgPerformerTotal} images and updated studio on {imgStudioTotal} images")
+        logText = f"""Finished updating {imagetotal} image(s):
+            Updated performers on {imgPerformerTotal} image(s)
+            Updated studio on {imgStudioTotal} image(s)
+        """
+        log.info(logText)
 
     log.exit("Plugin exited normally.")
 
 # Searches for "Update Performers" and "Update Studio" tags and adds them
 # to the gallery and image filters
-def setTagFilters(MODE):
+def setTagFilters(taggedMode: bool):
     # Default to -1 which will give desired behaviour if tags do not exist
     performerTagID = -1
     try:
@@ -175,10 +196,9 @@ def setTagFilters(MODE):
             '"Update Studio" tag does not exist, proceeding without tag filtering for studios')
 
     IMAGE_FILTER["AND"]["OR"]["tags"]["value"] = [studioTagID, performerTagID]
-    if MODE == "tagged":
-        # Only consider galleries with the "Update Performers" and/or "Update Studio" tag
-        GALLERY_FILTER["tags"]["value"] = [studioTagID, performerTagID]
-        GALLERY_FILTER["tags"]["depth"] = -1  # Include ancestors at any level
+    if taggedMode:
+        # Only consider galleries with the "Update Performers" and/or "Update Studio" tag or parent tags
+        GALLERY_FILTER["tags"] = {"value": [studioTagID, performerTagID], "modifier": "INCLUDES", "depth": -1}
         log.info(f"Using gallery filter {GALLERY_FILTER}")
 
     return performerTagID, studioTagID
@@ -187,17 +207,17 @@ def setTagFilters(MODE):
 # Returns a tuple of bools indicating whether performers and studio should be set, respectively
 
 
-def setGalleryMetadataFlags(gallery: dict, mode, performerTagID, studioTagID):
+def setGalleryMetadataFlags(gallery: dict, taggedMode: bool, performerTagID, studioTagID, dryrun: bool):
     setPerformers, setStudio = processTags(
-        gallery, performerTagID, studioTagID)
+        gallery, performerTagID, studioTagID, dryrun, isGallery=True)
 
     # Studio will be set based on following criteria:
     # - gallery has studio set AND:
     #   - tagged with "Update Studio" OR
     #   - mode is not "tagged"
-    if gallery["studio"] == None:
+    if "studio" not in gallery or gallery["studio"] == None:
         setStudio = False
-    elif mode != "tagged":
+    elif not taggedMode:
         setStudio = True
 
     # Performer(s) will be set based on following criteria:
@@ -206,7 +226,7 @@ def setGalleryMetadataFlags(gallery: dict, mode, performerTagID, studioTagID):
     #   - mode is not "tagged"
     if "performers" not in gallery or len(gallery["performers"]) == 0:
         setPerformers = False
-    elif mode != "tagged":
+    elif not taggedMode:
         setPerformers = True
 
     return setPerformers, setStudio
@@ -214,11 +234,11 @@ def setGalleryMetadataFlags(gallery: dict, mode, performerTagID, studioTagID):
 # Returns a tuple of bools indicating whether performers and studio should be set, respectively
 
 
-def setImageMetadataFlags(image: dict, performerTagID, studioTagID):
+def setImageMetadataFlags(image: dict, performerTagID, studioTagID, dryrun: bool):
     setPerformers, setStudio = processTags(
-        image, performerTagID, studioTagID, isGallery=False)
+        image, performerTagID, studioTagID, dryrun, isGallery=False)
 
-    if image["studio"] == None:
+    if "studio" not in image or image["studio"] == None:
         setStudio = True
 
     if "performers" not in image or len(image["performers"]) == 0:
@@ -229,13 +249,13 @@ def setImageMetadataFlags(image: dict, performerTagID, studioTagID):
 # Checks if "Update Performers" or "Update Studio" tags are set and removes them
 
 
-def processTags(item, performerTagID, studioTagID, isGallery=True):
+def processTags(item, performerTagID, studioTagID, dryrun: bool, isGallery: bool):
     # TODO make more generic by passing list of tag IDs and returning list of bools
     itemID = item["id"]
     tagids = []
     updatePerformers = False
     updateStudio = False
-    if item["tags"] == None or len(item["tags"]) == 0:
+    if "tags" not in item or item["tags"] == None or len(item["tags"]) == 0:
         return updatePerformers, updateStudio
 
     for tag in item["tags"]:
@@ -247,11 +267,12 @@ def processTags(item, performerTagID, studioTagID, isGallery=True):
             updateStudio = True
             continue
         tagids.append(tagid)
-    update_input = {"id": itemID, "tag_ids": tagids}
-    if isGallery:
-        stash.update_gallery(update_input)
-    else:
-        stash.update_image(update_input)
+    if not dryrun:
+        update_input = {"id": itemID, "tag_ids": tagids}
+        if isGallery:
+            stash.update_gallery(update_input)
+        else:
+            stash.update_image(update_input)
     return updatePerformers, updateStudio
 
 

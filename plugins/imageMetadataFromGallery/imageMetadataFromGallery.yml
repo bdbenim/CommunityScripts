@@ -10,24 +10,32 @@
 # tag to them and running the "Tagged Galleries" task. Images not in these galleries
 # will be ignored (even if they also have the "Update Performers" tag)
 
-name: "Set Image Metadata From Gallery"
+name: "Image Metadata From Gallery"
 description: Sets image performers and studio based on gallery metadata
 version: 0.3.0
 url: https://github.com/bdbenim/CommunityScripts
 exec:
   - python
-  - "{pluginDir}/imagePerformersFromGallery.py"
+  - "{pluginDir}/imageMetadataFromGallery.py"
 interface: raw
 tasks:
   - name: 'All Galleries'
     description: 'Update all images with missing performers or studio to match their gallery metadata.'
     defaultArgs:
-      mode: update
+      mode: 'update'
+      tagged: 'false'
   - name: 'Tagged Galleries'
     description: 'Add performers and studio to all images based on their gallery, but only if the gallery has the "Update Performers" or "Update Studio" tag.'
     defaultArgs:
-      mode: tagged
+      mode: 'update'
+      tagged: 'true'
   - name: 'Dry Run'
     description: 'Only checks for eligible images, but does not make any changes. Check the logs to see how many images are found.'
     defaultArgs:
-      mode: dryrun
+      mode: 'dryrun'
+      tagged: 'false'
+  - name: 'Tagged Galleries Dry Run'
+    description: 'Only checks for eligible images in tagged galleries, and does not make any changes. Check the logs to see how many images are found.'
+    defaultArgs:
+      mode: 'dryrun'
+      tagged: 'true'
