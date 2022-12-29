@@ -60,8 +60,3 @@ by the plugin.
 
 The tags described above may also be applied as sub-tags. For instance, an "Update All" tag applied to an
 image could satisfy these criteria if it is a parent of the other tags.
-
-# Known Issues
-
-When running in tagged mode, images belonging to a tagged gallery will have their metadata updated from
-ALL of their galleries, even if only one gallery is tagged. This will be patched in a future update.
