@@ -1,0 +1,31 @@
+# This plugin searches for all performers tagged "Merge From Performer" and merges them
+# into a performer tagged "Merge Into Performer". If more than one performer is tagged
+# with the second tag, the merge is aborted.
+#
+# Details default to the destination performer, but gaps will be filled by source
+# performers as applicable. For example if both the destination and source list a
+# date of birth, then the destination DOB is preserved. However, if more the
+# destination does not include a DOB then it will be taken from the source. If more
+# than one source has the DOB, then it is undefined which performer info will be used.
+#
+# Scenes, galleries, and images of source performer(s) will be updated to the destination
+# performer, details and tags will be merged, and then the source performer(s) will be
+# deleted.
+
+name: "Merge Performers"
+description: Sets image performers and studio based on gallery metadata
+version: 0.1.0
+url: https://github.com/bdbenim/CommunityScripts
+exec:
+  - python
+  - "{pluginDir}/performerMerger.py"
+interface: raw
+tasks:
+  - name: 'Merge Performers'
+    description: 'Merge performers as tagged.'
+    defaultArgs:
+      mode: 'update'
+  - name: 'Dry Run'
+    description: 'Only outputs actions to the log without making any changes.'
+    defaultArgs:
+      mode: 'dryrun'
